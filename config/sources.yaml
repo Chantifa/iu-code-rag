@@ -1,0 +1,64 @@
+# Repositories that get indexed by `iu-rag ingest`.
+#
+# type: user | org   -> lists every repository of that GitHub account
+# type: repo         -> a single repository, given as owner/name
+sources:
+  - type: user
+    name: Chantifa
+    include_forks: false
+    exclude: []            # add repository names here to skip them
+
+  - type: org
+    name: iubh
+    include_forks: false
+    exclude: []
+
+# Only files with these extensions are indexed. Jupyter notebooks are
+# converted to text (markdown + code cells) before chunking.
+include_extensions:
+  - .py
+  - .ipynb
+  - .java
+  - .kt
+  - .kts
+  - .js
+  - .jsx
+  - .ts
+  - .tsx
+  - .php
+  - .cs
+  - .r
+  - .R
+  - .sql
+  - .sh
+  - .html
+  - .css
+  - .scss
+  - .md
+  - .rst
+  - .txt
+  - .yml
+  - .yaml
+  - .toml
+  - .json
+  - .xml
+  - .properties
+  - .gradle
+  - Dockerfile
+
+# Glob patterns (matched against the path inside the repository) to skip.
+exclude_globs:
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/target/**"
+  - "**/vendor/**"
+  - "**/__pycache__/**"
+  - "**/.idea/**"
+  - "**/*.min.js"
+  - "**/*.min.css"
+  - "**/package-lock.json"
+  - "**/yarn.lock"
+  - "**/*.lock"
+  - "**/.ipynb_checkpoints/**"
