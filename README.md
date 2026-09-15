@@ -135,6 +135,15 @@ docker compose run --rm -e LLM_PROVIDER=none rag sh -c "pip install pytest && py
 Add `-e LLM_PROVIDER=ollama -e OLLAMA_BASE_URL=http://ollama:11434` to also run the LLM-backed
 similarity test.
 
+**Troubleshooting on Windows**
+
+Docker Desktop needs hardware virtualisation. If `docker info` fails and the Docker Desktop log
+(`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`) shows
+`WSL2 is unable to start since virtualization is not enabled`, check
+`systeminfo | findstr /i "Virtualization"`: it must say *Virtualization Enabled In Firmware: Yes*.
+Enable VT-x / AMD-V (often called "SVM Mode" or "Intel Virtualization Technology") in the BIOS/UEFI,
+then run `wsl --install --no-distribution` in an elevated terminal and restart Docker Desktop.
+
 **Using Claude instead of Ollama**
 
 Set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...` in `.env` and restart. The model defaults to

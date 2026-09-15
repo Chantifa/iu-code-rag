@@ -34,7 +34,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate docker-compose file
+        run: docker compose config -q
       - name: Build image
         run: docker build -t iu-code-rag:ci .
       - name: Run tests inside the image
-        run: docker run --rm -e LLM_PROVIDER=none iu-code-rag:ci sh -c "pip install pytest && pytest -q"
+        run: docker run --rm -e LLM_PROVIDER=none iu-code-rag:ci sh -c "pip install -q pytest && pytest -q"
+      - name: End-to-end smoke test (ingest two real repos, query the API)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data
+          docker run --rm -e LLM_PROVIDER=none -e GITHUB_TOKEN -v "$PWD/data:/app/data" iu-code-rag:ci \
+            iu-rag ingest --repo Chantifa/Interviews --repo iubh/DLBCSL01_DataStructures_and_Algorithms
+          docker run -d --name rag -p 8000:8000 -e LLM_PROVIDER=none -v "$PWD/data:/app/data" iu-code-rag:ci
+          for i in $(seq 1 45); do curl -sf localhost:8000/health >/dev/null && break; sleep 2; done
+          curl -sf localhost:8000/health | tee /dev/stderr | grep -q '"index_loaded":true'
+          curl -sf localhost:8000/ask -H 'content-type: application/json' \
+            -d '{"question":"How does the rate limiter decide whether a request is allowed?"}' \
+            | tee /dev/stderr | grep -q 'rate_limiter.py'
+          docker logs rag | tail -20
+          docker rm -f rag
