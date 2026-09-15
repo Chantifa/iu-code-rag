@@ -11,6 +11,7 @@ from iu_code_rag.retriever import code_tokenize
 
 
 def test_loader_reads_both_owners(documents):
+    """The fixture corpus yields documents from both owners with language and GitHub URL set."""
     owners = {d.metadata["owner"] for d in documents}
     assert owners == {"Chantifa", "iubh"}
     langs = {d.metadata["language"] for d in documents}
@@ -21,6 +22,7 @@ def test_loader_reads_both_owners(documents):
 
 
 def test_sources_config_filters(sources_config):
+    """Include-extension and exclude-glob rules from sources.yaml behave as documented."""
     assert sources_config.accepts("src/main.py")
     assert sources_config.accepts("README.md")
     assert not sources_config.accepts("node_modules/x/index.js")
@@ -29,6 +31,7 @@ def test_sources_config_filters(sources_config):
 
 
 def test_chunks_carry_header_and_metadata(documents):
+    """Every chunk starts with its ``# File:`` header, respects the size limit and has a unique id."""
     chunks = chunk_documents(documents, chunk_size=600, chunk_overlap=50)
     assert len(chunks) > len(documents)
     for c in chunks:
@@ -40,6 +43,7 @@ def test_chunks_carry_header_and_metadata(documents):
 
 
 def test_python_chunks_split_on_definitions():
+    """The Python-aware splitter cuts at function definitions instead of mid-function."""
     code = "\n\n".join(f"def f{i}(x):\n    return x + {i}\n" for i in range(40))
     doc = Document(page_content=code, metadata={"source": "a/b/c.py", "language": "python"})
     chunks = chunk_documents([doc], chunk_size=300, chunk_overlap=0)
@@ -48,6 +52,7 @@ def test_python_chunks_split_on_definitions():
 
 
 def test_notebook_to_text():
+    """Notebook cells become markdown plus fenced code blocks; empty cells are dropped."""
     nb = {
         "cells": [
             {"cell_type": "markdown", "source": ["# Title\n", "Some text"]},
@@ -62,6 +67,7 @@ def test_notebook_to_text():
 
 
 def test_binary_and_oversized_files_are_skipped(tmp_path: Path, sources_config):
+    """Files containing NUL bytes or exceeding max_file_bytes are not loaded."""
     repo = tmp_path / "owner" / "repo"
     repo.mkdir(parents=True)
     (repo / "ok.py").write_text("print('hi')\n", encoding="utf-8")
@@ -72,5 +78,6 @@ def test_binary_and_oversized_files_are_skipped(tmp_path: Path, sources_config):
 
 
 def test_code_tokenizer_splits_identifiers():
+    """The BM25 tokenizer emits the whole identifier plus its camelCase / snake_case parts."""
     toks = code_tokenize("KElbowVisualizer max_requests isAllowed")
     assert {"kelbowvisualizer", "k", "elbow", "visualizer", "max", "requests", "is", "allowed"} <= set(toks)

@@ -10,6 +10,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """All runtime configuration, read from environment variables or a ``.env`` file.
+
+    Field names map to upper-case variables (``LLM_PROVIDER``, ``CHUNK_SIZE`` ...); the README
+    configuration table explains every value.
+    """
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- sources -------------------------------------------------------------
@@ -47,12 +53,15 @@ class Settings(BaseSettings):
 
     @property
     def repos_dir(self) -> Path:
+        """Directory where downloaded repositories are cached (``<data_dir>/repos/<owner>/<repo>``)."""
         return self.data_dir / "repos"
 
     @property
     def index_dir(self) -> Path:
+        """Directory holding the FAISS index, ``chunks.jsonl`` and ``index_meta.json``."""
         return self.data_dir / "index"
 
 
 def get_settings() -> Settings:
+    """Create a fresh :class:`Settings` instance from the current environment."""
     return Settings()

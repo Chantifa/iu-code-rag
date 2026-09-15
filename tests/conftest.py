@@ -19,7 +19,10 @@ CORPUS = ROOT / "tests" / "fixtures" / "corpus"
 
 @pytest.fixture(scope="session")
 def settings() -> Settings:
-    # Tests never talk to an LLM unless explicitly marked; they always use local embeddings.
+    """Test settings: extractive mode, local embeddings, top_k=5, no index on disk.
+
+    Tests never talk to an LLM unless they are marked ``llm`` and use ``llm_pipeline``.
+    """
     return Settings(
         llm_provider="none",
         sources_file=ROOT / "config" / "sources.yaml",
@@ -30,11 +33,13 @@ def settings() -> Settings:
 
 @pytest.fixture(scope="session")
 def sources_config(settings) -> SourcesConfig:
+    """The real ``config/sources.yaml`` so the tests use the production file filters."""
     return SourcesConfig.load(settings.sources_file)
 
 
 @pytest.fixture(scope="session")
 def documents(settings, sources_config):
+    """All fixture files loaded as LangChain Documents (21 real files from both GitHub accounts)."""
     docs = load_documents_from_dir(CORPUS, sources_config, settings.max_file_bytes)
     assert docs, "fixture corpus is empty"
     return docs
@@ -42,16 +47,19 @@ def documents(settings, sources_config):
 
 @pytest.fixture(scope="session")
 def embeddings(settings):
+    """The local sentence-transformers embedding model, loaded once per test session."""
     return get_embeddings(settings.embedding_model, settings.embedding_device)
 
 
 @pytest.fixture(scope="session")
 def pipeline(documents, settings) -> RagPipeline:
+    """In-memory RAG pipeline over the fixture corpus, built once per test session."""
     return RagPipeline.from_documents(documents, settings)
 
 
 @pytest.fixture(scope="session")
 def golden():
+    """The golden queries from ``tests/golden/queries.jsonl``."""
     return load_golden(ROOT / "tests" / "golden" / "queries.jsonl")
 
 

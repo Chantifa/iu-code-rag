@@ -42,6 +42,11 @@ def fetch_repositories(
 
 
 def build_index(settings: Settings) -> dict:
+    """Load all cached repositories, chunk and embed them and save the FAISS index.
+
+    Returns the index metadata (documents, chunks, repositories, timings) that is also written
+    to ``index_meta.json`` and served by ``/stats``.
+    """
     config = SourcesConfig.load(settings.sources_file)
     docs = load_documents_from_dir(settings.repos_dir, config, settings.max_file_bytes)
     if not docs:

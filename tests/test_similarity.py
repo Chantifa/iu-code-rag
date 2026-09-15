@@ -53,6 +53,7 @@ UNRELATED_MAX = 0.35
 
 
 def test_self_similarity_is_one_and_symmetric(embeddings):
+    """cos(a, a) is 1 and cos(a, b) equals cos(b, a)."""
     a = embeddings.embed_query("hybrid retrieval with BM25 and FAISS")
     b = embeddings.embed_query("a completely different sentence about cooking pasta")
     assert cosine_similarity(a, a) == pytest.approx(1.0, abs=1e-5)
@@ -60,6 +61,7 @@ def test_self_similarity_is_one_and_symmetric(embeddings):
 
 
 def test_embeddings_are_normalised(embeddings):
+    """Embedding vectors have unit length, so inner product equals cosine similarity."""
     import numpy as np
 
     v = np.asarray(embeddings.embed_query("normalised vector"))
@@ -68,12 +70,14 @@ def test_embeddings_are_normalised(embeddings):
 
 @pytest.mark.parametrize("a,b", PARAPHRASE_PAIRS, ids=[f"para{i}" for i in range(len(PARAPHRASE_PAIRS))])
 def test_paraphrases_are_similar(embeddings, a, b):
+    """Similarity test: paraphrase pairs must reach at least PARAPHRASE_MIN."""
     sim = cosine_similarity(embeddings.embed_query(a), embeddings.embed_query(b))
     assert sim >= PARAPHRASE_MIN, f"cosine={sim:.3f} < {PARAPHRASE_MIN}"
 
 
 @pytest.mark.parametrize("a,b", UNRELATED_PAIRS, ids=[f"unrel{i}" for i in range(len(UNRELATED_PAIRS))])
 def test_unrelated_texts_are_dissimilar(embeddings, a, b):
+    """Similarity test: unrelated pairs must stay at or below UNRELATED_MAX."""
     sim = cosine_similarity(embeddings.embed_query(a), embeddings.embed_query(b))
     assert sim <= UNRELATED_MAX, f"cosine={sim:.3f} > {UNRELATED_MAX}"
 

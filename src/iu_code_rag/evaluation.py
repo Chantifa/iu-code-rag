@@ -29,15 +29,24 @@ def _find_tests_dir() -> Path:
 
 
 def default_golden_file() -> Path:
+    """Path of the default golden query set, ``tests/golden/queries.jsonl``."""
     return _find_tests_dir() / "golden" / "queries.jsonl"
 
 
 def default_fixture_corpus() -> Path:
+    """Path of the small real-code corpus used by the tests, ``tests/fixtures/corpus``."""
     return _find_tests_dir() / "fixtures" / "corpus"
 
 
 @dataclass
 class GoldenQuery:
+    """One entry of the golden set.
+
+    ``expected_sources`` are substrings that must occur in a retrieved ``owner/repo/path``,
+    ``expected_keywords`` must appear in the answer text, ``golden_answer`` is the reference
+    answer used for similarity scoring and ``paraphrase`` a differently worded question.
+    """
+
     id: str
     question: str
     expected_sources: list[str]
@@ -48,6 +57,7 @@ class GoldenQuery:
 
 
 def load_golden(path: Path | None = None) -> list[GoldenQuery]:
+    """Read golden queries from a JSON-lines file (blank lines and ``#`` comments are ignored)."""
     path = Path(path) if path else default_golden_file()
     out: list[GoldenQuery] = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -57,10 +67,12 @@ def load_golden(path: Path | None = None) -> list[GoldenQuery]:
 
 
 def source_matches(source: str, expected: list[str]) -> bool:
+    """True if any expected substring occurs in ``source`` (case-insensitive)."""
     return any(e.lower() in source.lower() for e in expected)
 
 
 def first_hit_rank(sources: list[str], expected: list[str]) -> int | None:
+    """1-based rank of the first source matching ``expected``, or ``None`` if none matched."""
     for i, s in enumerate(sources, 1):
         if source_matches(s, expected):
             return i
@@ -68,6 +80,12 @@ def first_hit_rank(sources: list[str], expected: list[str]) -> int | None:
 
 
 def evaluate(pipeline: RagPipeline, golden: list[GoldenQuery], k: int = 5, with_answers: bool = True) -> dict:
+    """Run every golden query through the pipeline and compute retrieval and answer metrics.
+
+    Returns ``{"summary": {...}, "results": [...]}`` with hit rate and MRR at ``k``. With
+    ``with_answers`` it also records the missing keywords per query, the cosine similarity
+    between the generated and the golden answer, and the mean of those similarities.
+    """
     emb = get_embeddings(pipeline.settings.embedding_model, pipeline.settings.embedding_device)
     rows = []
     for g in golden:

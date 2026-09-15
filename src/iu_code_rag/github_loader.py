@@ -29,6 +29,8 @@ GITHUB_API = "https://api.github.com"
 
 @dataclass
 class SourceSpec:
+    """One entry of ``sources:`` in ``config/sources.yaml``: a GitHub user, organisation or single repo."""
+
     type: str  # user | org | repo
     name: str
     include_forks: bool = False
@@ -37,12 +39,15 @@ class SourceSpec:
 
 @dataclass
 class SourcesConfig:
+    """The parsed ``config/sources.yaml``: which accounts to index and which files to keep."""
+
     sources: list[SourceSpec]
     include_extensions: list[str]
     exclude_globs: list[str]
 
     @classmethod
     def load(cls, path: Path) -> SourcesConfig:
+        """Parse the YAML sources file into a :class:`SourcesConfig`."""
         raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         sources = [SourceSpec(**s) for s in raw.get("sources", [])]
         return cls(
@@ -67,6 +72,8 @@ class SourcesConfig:
 
 @dataclass
 class RepoRef:
+    """A repository as returned by the GitHub API, reduced to the fields ingestion needs."""
+
     owner: str
     name: str
     default_branch: str
@@ -76,6 +83,7 @@ class RepoRef:
 
     @property
     def full_name(self) -> str:
+        """The repository name in ``owner/name`` form."""
         return f"{self.owner}/{self.name}"
 
 
@@ -85,13 +93,17 @@ class RepoRef:
 
 
 class GitHubClient:
+    """Thin wrapper around the GitHub REST API: list repositories and download tarballs."""
+
     def __init__(self, token: str | None = None, timeout: float = 120.0):
+        """Create the HTTP client; a token is optional but raises the rate limit from 60 to 5000 requests/hour."""
         headers = {"Accept": "application/vnd.github+json", "User-Agent": "iu-code-rag"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.Client(base_url=GITHUB_API, headers=headers, timeout=timeout, follow_redirects=True)
 
     def _paginate(self, url: str) -> Iterator[dict]:
+        """Yield every item of a paginated list endpoint (100 items per page)."""
         page = 1
         while True:
             resp = self._client.get(url, params={"per_page": 100, "page": page})
@@ -105,6 +117,7 @@ class GitHubClient:
             page += 1
 
     def list_repos(self, spec: SourceSpec) -> list[RepoRef]:
+        """Resolve a :class:`SourceSpec` to concrete repositories, skipping forks, excluded and empty ones."""
         if spec.type == "repo":
             owner, name = spec.name.split("/", 1)
             data = self._client.get(f"/repos/{owner}/{name}")
@@ -233,6 +246,7 @@ def notebook_to_text(raw: str) -> str:
 
 
 def _read_text(path: Path) -> str | None:
+    """Read a file as UTF-8 text; ``None`` for unreadable or binary files. Notebooks are flattened."""
     try:
         data = path.read_bytes()
     except OSError:
@@ -254,6 +268,11 @@ def load_documents_from_repo_dir(
     branch: str = "main",
     html_url: str | None = None,
 ) -> list[Document]:
+    """Turn every accepted file below ``repo_dir`` into a LangChain ``Document``.
+
+    Metadata: ``source`` (owner/repo/path), ``owner``, ``repo``, ``path``, ``language`` and the
+    GitHub ``url`` of the file on ``branch``.
+    """
     docs: list[Document] = []
     html_url = html_url or f"https://github.com/{owner}/{name}"
     for path in sorted(repo_dir.rglob("*")):
@@ -304,6 +323,7 @@ def load_documents_from_dir(root: Path, config: SourcesConfig, max_file_bytes: i
 
 
 def iter_repo_dirs(root: Path) -> Iterable[tuple[str, str, Path]]:
+    """Yield ``(owner, repo, directory)`` for every cached repository below ``root``."""
     for owner_dir in sorted(p for p in Path(root).iterdir() if p.is_dir()):
         for repo_dir in sorted(p for p in owner_dir.iterdir() if p.is_dir()):
             yield owner_dir.name, repo_dir.name, repo_dir

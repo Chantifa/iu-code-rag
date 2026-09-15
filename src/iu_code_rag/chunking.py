@@ -22,6 +22,11 @@ _LANGUAGE_MAP: dict[str, Language] = {
 
 
 def _splitter_for(language: str, chunk_size: int, chunk_overlap: int) -> RecursiveCharacterTextSplitter:
+    """Return a LangChain splitter tuned for ``language``.
+
+    Known languages get separators such as ``class``/``def``/``function``; anything else
+    falls back to the generic recursive character splitter.
+    """
     lang = _LANGUAGE_MAP.get(language)
     if lang is None:
         return RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)

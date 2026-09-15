@@ -39,6 +39,12 @@ PROMPT = ChatPromptTemplate.from_messages(
 
 @dataclass
 class SourceHit:
+    """One retrieved chunk as reported to the caller of :meth:`RagPipeline.ask`.
+
+    ``score`` is the fused hybrid score, ``cosine`` the dense similarity (``None`` when the chunk
+    was found by BM25 only) and ``snippet`` the first characters of the chunk text.
+    """
+
     source: str
     url: str
     score: float
@@ -49,12 +55,15 @@ class SourceHit:
 
 @dataclass
 class RagAnswer:
+    """Result of one question: the generated answer, the chunks it was based on and the provider used."""
+
     question: str
     answer: str
     sources: list[SourceHit] = field(default_factory=list)
     provider: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise the answer into plain JSON-compatible dictionaries (used by the HTTP API)."""
         return {
             "question": self.question,
             "answer": self.answer,
@@ -64,6 +73,7 @@ class RagAnswer:
 
 
 def format_docs(docs: list[Document]) -> str:
+    """Join the retrieved chunks into the single context string that is placed into the prompt."""
     return "\n\n---\n\n".join(d.page_content for d in docs)
 
 
@@ -112,7 +122,15 @@ def build_generation_chain(llm: Runnable | None) -> Runnable:
 
 
 class RagPipeline:
+    """End-to-end pipeline: hybrid retriever -> context formatting -> generator.
+
+    Create it with :meth:`from_index` (persisted index on disk) or :meth:`from_documents`
+    (in memory, used by the tests). ``chain`` is the LangChain runnable; :meth:`ask` wraps its
+    output into a :class:`RagAnswer`.
+    """
+
     def __init__(self, retriever: HybridRetriever, settings: Settings, index_meta: dict | None = None):
+        """Wire retriever, LLM and the LCEL chain; ``index_meta`` is the build info shown by ``/stats``."""
         self.retriever = retriever
         self.settings = settings
         self.index_meta = index_meta or {}
@@ -127,6 +145,7 @@ class RagPipeline:
     # ------------------------------------------------------------------ #
     @classmethod
     def from_index(cls, settings: Settings) -> RagPipeline:
+        """Load the FAISS index and chunk corpus from ``settings.index_dir`` and build the pipeline."""
         embeddings = get_embeddings(settings.embedding_model, settings.embedding_device)
         vs, chunks, meta = load_index(settings.index_dir, embeddings)
         retriever = HybridRetriever.from_chunks(vs, chunks, k=settings.top_k, vector_weight=settings.vector_weight)
@@ -143,11 +162,13 @@ class RagPipeline:
 
     # ------------------------------------------------------------------ #
     def search(self, query: str, k: int | None = None) -> list[Document]:
+        """Retrieve the top-k chunks for ``query`` without generating an answer."""
         if k is not None:
             self.retriever.k = k
         return self.retriever.invoke(query)
 
     def ask(self, question: str, k: int | None = None) -> RagAnswer:
+        """Run the full chain for ``question`` and package answer and sources into a :class:`RagAnswer`."""
         if k is not None:
             self.retriever.k = k
         result = self.chain.invoke(question)
@@ -168,4 +189,5 @@ class RagPipeline:
 
 
 def index_exists(index_dir: Path) -> bool:
+    """True if ``iu-rag ingest`` has written a FAISS index into ``index_dir``."""
     return (Path(index_dir) / "index.faiss").exists()

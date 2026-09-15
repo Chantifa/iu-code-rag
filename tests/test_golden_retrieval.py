@@ -20,6 +20,7 @@ K = 5
 
 @pytest.mark.parametrize("g", GOLDEN, ids=[g.id for g in GOLDEN])
 def test_golden_source_is_retrieved(pipeline, g):
+    """Golden test: the expected file appears in the top-k results for the question."""
     docs = pipeline.search(g.question, k=K)
     sources = [d.metadata["source"] for d in docs]
     rank = first_hit_rank(sources, g.expected_sources)
@@ -28,6 +29,7 @@ def test_golden_source_is_retrieved(pipeline, g):
 
 @pytest.mark.parametrize("g", [g for g in GOLDEN if g.paraphrase], ids=[g.id for g in GOLDEN if g.paraphrase])
 def test_paraphrase_is_retrieved(pipeline, g):
+    """Golden test: the expected file is also found for the paraphrased question."""
     docs = pipeline.search(g.paraphrase, k=K)
     sources = [d.metadata["source"] for d in docs]
     assert first_hit_rank(sources, g.expected_sources) is not None, f"paraphrase missed: {sources}"
@@ -44,6 +46,7 @@ def test_extractive_answer_contains_expected_keywords(pipeline, g):
 
 
 def test_aggregate_retrieval_metrics(pipeline):
+    """Hit rate and MRR over the whole golden set must stay above their floors."""
     report = evaluate(pipeline, GOLDEN, k=K, with_answers=False)
     summary = report["summary"]
     assert summary["hit_rate"] >= 0.9, summary
@@ -51,6 +54,7 @@ def test_aggregate_retrieval_metrics(pipeline):
 
 
 def test_results_are_ranked_and_deduplicated(pipeline):
+    """Fused scores come back in descending order and no chunk id repeats."""
     docs = pipeline.search("rate limiter sliding window", k=8)
     scores = [d.metadata["score"] for d in docs]
     assert scores == sorted(scores, reverse=True)

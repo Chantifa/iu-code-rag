@@ -44,10 +44,16 @@ class HybridRetriever(BaseRetriever):
     def from_chunks(
         cls, vector_store: FAISS, chunks: list[Document], k: int = 6, vector_weight: float = 0.6
     ) -> HybridRetriever:
+        """Build the retriever from a FAISS store and the chunk list (the BM25 index is created here)."""
         bm25 = BM25Retriever.from_documents(chunks, preprocess_func=code_tokenize, k=k * 3)
         return cls(vector_store=vector_store, bm25=bm25, k=k, vector_weight=vector_weight)
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        """LangChain hook: fetch ``k * candidate_multiplier`` candidates from FAISS and BM25 and fuse them.
+
+        Weighted reciprocal rank fusion: each list contributes ``weight / (rrf_k + rank)`` per chunk.
+        The fused ``score`` and, when available, the dense ``cosine`` are stored in the chunk metadata.
+        """
         n = self.k * self.candidate_multiplier
         dense = self.vector_store.similarity_search_with_score(query, k=n)
         self.bm25.k = n

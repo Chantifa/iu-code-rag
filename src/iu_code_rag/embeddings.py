@@ -25,6 +25,7 @@ def get_embeddings(
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity between two vectors (0.0 if either vector is all zeros)."""
     va, vb = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
     denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
     if denom == 0.0:

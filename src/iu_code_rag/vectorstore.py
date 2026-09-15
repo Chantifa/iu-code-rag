@@ -18,12 +18,14 @@ META_FILE = "index_meta.json"
 
 
 def build_vector_store(chunks: list[Document], embeddings: Embeddings) -> FAISS:
+    """Embed the chunks into an in-memory FAISS index using inner product (= cosine on normalised vectors)."""
     if not chunks:
         raise ValueError("no chunks to index")
     return FAISS.from_documents(chunks, embeddings, distance_strategy=DistanceStrategy.MAX_INNER_PRODUCT)
 
 
 def save_index(vs: FAISS, chunks: list[Document], index_dir: Path, meta: dict | None = None) -> None:
+    """Persist the FAISS index, the chunk corpus (``chunks.jsonl``) and the build metadata into ``index_dir``."""
     index_dir = Path(index_dir)
     index_dir.mkdir(parents=True, exist_ok=True)
     vs.save_local(str(index_dir))
@@ -35,6 +37,7 @@ def save_index(vs: FAISS, chunks: list[Document], index_dir: Path, meta: dict | 
 
 
 def load_chunks(index_dir: Path) -> list[Document]:
+    """Read the chunk corpus back from ``chunks.jsonl`` (needed to rebuild the BM25 index)."""
     path = Path(index_dir) / CHUNKS_FILE
     docs: list[Document] = []
     with path.open(encoding="utf-8") as fh:
@@ -46,6 +49,7 @@ def load_chunks(index_dir: Path) -> list[Document]:
 
 
 def load_index(index_dir: Path, embeddings: Embeddings) -> tuple[FAISS, list[Document], dict]:
+    """Load FAISS index, chunks and metadata from ``index_dir``; raises ``FileNotFoundError`` without an index."""
     index_dir = Path(index_dir)
     if not (index_dir / "index.faiss").exists():
         raise FileNotFoundError(f"no index at {index_dir}; run `iu-rag ingest` first")

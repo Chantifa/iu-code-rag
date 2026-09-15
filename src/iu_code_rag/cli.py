@@ -17,6 +17,7 @@ console = Console()
 
 
 def _setup_logging(verbose: bool) -> None:
+    """Configure logging for the CLI; ``verbose`` switches to DEBUG and httpx request noise is muted."""
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
