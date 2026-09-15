@@ -79,6 +79,14 @@ def serve(host: str | None = None, port: int | None = None, reload: bool = False
 
 
 @app.command()
+def mcp():
+    """Start the MCP server (stdio) that exposes search_code / ask_code / index_stats to agents."""
+    from .mcp_server import main
+
+    main()
+
+
+@app.command()
 def evaluate(
     k: int = typer.Option(5),
     fixtures: bool = typer.Option(False, help="Evaluate against the small test corpus instead of the real index."),

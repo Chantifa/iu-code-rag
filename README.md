@@ -190,6 +190,7 @@ If you have Ollama installed natively: `ollama pull qwen2.5-coder:1.5b` and set
 | `iu-rag search "query" [--k 6]` | Retrieval only, print the best chunks |
 | `iu-rag serve [--host] [--port] [--reload]` | Start the FastAPI server |
 | `iu-rag evaluate [--k 5] [--fixtures] [--no-answers] [--output file]` | Golden-set evaluation, JSON report |
+| `iu-rag mcp` / `iu-rag-mcp` | Start the MCP server (tools for agents, see below) |
 
 ---
 
@@ -318,6 +319,54 @@ index.
 
 ---
 
+## Using it from an agent (MCP server)
+
+`src/iu_code_rag/mcp_server.py` exposes the RAG system through the Model Context Protocol, so
+Claude Code, Claude Desktop, Cursor, or a LangChain/LangGraph agent with an MCP adapter can call it
+as tools:
+
+| Tool | What it does |
+|---|---|
+| `search_code(query, k=5)` | hybrid retrieval; returns the best chunks with `owner/repo/path` and GitHub links |
+| `ask_code(question, k=6)` | full RAG answer from the configured LLM, with sources |
+| `index_stats()` | repositories, chunk count, embedding model of the loaded index |
+
+Start it on stdio with `iu-rag-mcp` (or `iu-rag mcp`, or `python -m iu_code_rag.mcp_server`).
+By default the FAISS index in `DATA_DIR` is loaded in-process; set `IU_RAG_API_URL=http://localhost:8000`
+to forward every call to the running Docker API instead. `IU_RAG_MCP_TRANSPORT=streamable-http`
+serves it over HTTP (`IU_RAG_MCP_HOST` / `IU_RAG_MCP_PORT`, default 127.0.0.1:8765).
+
+Register it in Claude Code from the project folder:
+
+```bash
+claude mcp add iu-code-rag -e IU_RAG_API_URL=http://localhost:8000 -- iu-rag-mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "iu-code-rag": {
+      "command": "C:\\Users\\X\\IdeaProjects\\iu-code-rag\\.venv\\Scripts\\iu-rag-mcp.exe",
+      "env": { "IU_RAG_API_URL": "http://localhost:8000" }
+    }
+  }
+}
+```
+
+For a LangGraph agent without MCP, the same functions can be wrapped directly:
+
+```python
+from langchain_core.tools import tool
+from iu_code_rag.mcp_server import search_code
+
+search_tool = tool(search_code)          # docstring becomes the tool description
+agent = create_react_agent(model, tools=[search_tool])
+```
+
+---
+
 ## Evaluation report
 
 `iu-rag evaluate` runs the golden set against the **real** index (or `--fixtures` for the test
@@ -342,6 +391,7 @@ src/iu_code_rag/
   ingest.py                    fetch repositories and build the index
   evaluation.py                golden-set metrics (hit@k, MRR, answer similarity)
   api.py                       FastAPI app + HTML page
+  mcp_server.py                MCP server: search_code / ask_code / index_stats tools for agents
   cli.py                       typer CLI
 tests/
   fixtures/corpus/             21 real files from both GitHub accounts
@@ -350,6 +400,7 @@ tests/
   test_similarity.py           similarity tests
   test_chunking_and_loader.py  unit tests
   test_api.py                  API tests
+  test_mcp_server.py           MCP tool tests (in-process and remote mode)
 Dockerfile, docker-compose.yml, .env.example, .github/workflows/ci.yml
 ```
 
