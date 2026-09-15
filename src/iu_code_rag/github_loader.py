@@ -56,6 +56,18 @@ class SourcesConfig:
             exclude_globs=raw.get("exclude_globs", []),
         )
 
+    def is_excluded(self, owner: str, repo: str) -> bool:
+        """True if ``owner/repo`` is listed under ``exclude`` of a matching source (case-insensitive).
+
+        Used both when listing repositories on GitHub and when rebuilding the index from the
+        local cache, so an excluded repository never sneaks back in via ``--skip-fetch``.
+        """
+        for spec in self.sources:
+            if spec.type in ("user", "org") and spec.name.lower() == owner.lower():
+                if repo.lower() in {e.lower() for e in spec.exclude}:
+                    return True
+        return False
+
     def accepts(self, rel_path: str) -> bool:
         """True if a file path inside a repository should be indexed."""
         p = Path(rel_path)
@@ -303,11 +315,14 @@ def load_documents_from_repo_dir(
 
 
 def load_documents_from_dir(root: Path, config: SourcesConfig, max_file_bytes: int = 200_000) -> list[Document]:
-    """Load every ``<root>/<owner>/<repo>/**`` file as Documents."""
+    """Load every ``<root>/<owner>/<repo>/**`` file as Documents (skipping excluded repositories)."""
     root = Path(root)
     docs: list[Document] = []
     for owner_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         for repo_dir in sorted(p for p in owner_dir.iterdir() if p.is_dir()):
+            if config.is_excluded(owner_dir.name, repo_dir.name):
+                log.info("skipping excluded cached repository %s/%s", owner_dir.name, repo_dir.name)
+                continue
             meta_file = repo_dir / ".repo.json"
             branch, html_url = "main", None
             if meta_file.exists():

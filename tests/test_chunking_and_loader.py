@@ -72,6 +72,19 @@ def test_notebook_to_text():
     assert text.count("```python") == 1
 
 
+def test_excluded_repositories_are_skipped_on_rebuild(tmp_path: Path, sources_config):
+    """Repositories listed under ``exclude`` are ignored even when they are already cached on disk."""
+    for owner, repo in [("Chantifa", "iu-code-rag"), ("Chantifa", "Interviews"), ("iubh", "IU-CODE-RAG")]:
+        d = tmp_path / owner / repo
+        d.mkdir(parents=True)
+        (d / "main.py").write_text("print('x')\n", encoding="utf-8")
+    assert sources_config.is_excluded("Chantifa", "iu-code-rag")
+    assert sources_config.is_excluded("chantifa", "IU-CODE-RAG")  # case-insensitive like GitHub
+    assert not sources_config.is_excluded("iubh", "iu-code-rag")  # only excluded for the Chantifa source
+    docs = load_documents_from_dir(tmp_path, sources_config)
+    assert sorted(d.metadata["source"] for d in docs) == ["Chantifa/Interviews/main.py", "iubh/IU-CODE-RAG/main.py"]
+
+
 def test_binary_and_oversized_files_are_skipped(tmp_path: Path, sources_config):
     """Files containing NUL bytes or exceeding max_file_bytes are not loaded."""
     repo = tmp_path / "owner" / "repo"

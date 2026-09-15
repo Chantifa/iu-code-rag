@@ -6,7 +6,8 @@ sources:
   - type: user
     name: Chantifa
     include_forks: false
-    exclude: []            # add repository names here to skip them
+    exclude:               # repository names to skip
+      - iu-code-rag        # this project: its test fixtures are copies of files indexed elsewhere
 
   - type: org
     name: iubh
