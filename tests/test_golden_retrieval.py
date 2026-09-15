@@ -8,11 +8,13 @@ regressions that a single per-query test would not catch.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from iu_code_rag.evaluation import evaluate, first_hit_rank, load_golden
 
-GOLDEN = load_golden()
+GOLDEN = load_golden(Path(__file__).parent / "golden" / "queries.jsonl")
 K = 5
 
 

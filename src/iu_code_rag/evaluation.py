@@ -3,13 +3,37 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .chain import RagPipeline
 from .embeddings import cosine_similarity, get_embeddings
 
-GOLDEN_FILE = Path(__file__).resolve().parents[2] / "tests" / "golden" / "queries.jsonl"
+_TESTS_REL = Path("tests")
+
+
+def _find_tests_dir() -> Path:
+    """Locate the ``tests/`` folder whether the package is installed editable or into site-packages.
+
+    Order: ``$IU_RAG_TESTS_DIR``, ``<cwd>/tests`` (the Docker image runs from /app), then the
+    source checkout next to this package.
+    """
+    env = os.environ.get("IU_RAG_TESTS_DIR")
+    candidates = [Path(env)] if env else []
+    candidates += [Path.cwd() / _TESTS_REL, Path(__file__).resolve().parents[2] / _TESTS_REL]
+    for c in candidates:
+        if (c / "golden" / "queries.jsonl").exists():
+            return c
+    raise FileNotFoundError("tests/golden/queries.jsonl not found; set IU_RAG_TESTS_DIR or run from the repo root")
+
+
+def default_golden_file() -> Path:
+    return _find_tests_dir() / "golden" / "queries.jsonl"
+
+
+def default_fixture_corpus() -> Path:
+    return _find_tests_dir() / "fixtures" / "corpus"
 
 
 @dataclass
@@ -23,9 +47,10 @@ class GoldenQuery:
     tags: list[str] = field(default_factory=list)
 
 
-def load_golden(path: Path = GOLDEN_FILE) -> list[GoldenQuery]:
+def load_golden(path: Path | None = None) -> list[GoldenQuery]:
+    path = Path(path) if path else default_golden_file()
     out: list[GoldenQuery] = []
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.startswith("#"):
             out.append(GoldenQuery(**json.loads(line)))
     return out

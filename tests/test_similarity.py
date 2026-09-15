@@ -11,13 +11,14 @@ switch EMBEDDING_MODEL, re-calibrate them with `iu-rag evaluate --fixtures`.
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 
 import pytest
 
 from iu_code_rag.embeddings import cosine_similarity
 from iu_code_rag.evaluation import load_golden
 
-GOLDEN = load_golden()
+GOLDEN = load_golden(Path(__file__).parent / "golden" / "queries.jsonl")
 
 PARAPHRASE_PAIRS = [
     (

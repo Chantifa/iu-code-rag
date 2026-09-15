@@ -52,7 +52,7 @@ def pipeline(documents, settings) -> RagPipeline:
 
 @pytest.fixture(scope="session")
 def golden():
-    return load_golden()
+    return load_golden(ROOT / "tests" / "golden" / "queries.jsonl")
 
 
 @pytest.fixture(scope="session")

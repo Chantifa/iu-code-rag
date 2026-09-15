@@ -81,25 +81,27 @@ def serve(host: str | None = None, port: int | None = None, reload: bool = False
 def evaluate(
     k: int = typer.Option(5),
     fixtures: bool = typer.Option(False, help="Evaluate against the small test corpus instead of the real index."),
+    corpus: Path | None = typer.Option(None, help="Custom corpus directory (<owner>/<repo>/...) to evaluate against."),
+    golden: Path | None = typer.Option(None, help="Golden queries file (default: tests/golden/queries.jsonl)."),
     no_answers: bool = typer.Option(False, help="Only measure retrieval (faster, no LLM calls)."),
     output: Path = typer.Option(Path("data/eval_report.json")),
 ):
     """Run the golden-query evaluation and write a JSON report."""
     _setup_logging(False)
     from .chain import RagPipeline
+    from .evaluation import default_fixture_corpus, load_golden
     from .evaluation import evaluate as run_eval
-    from .evaluation import load_golden
     from .github_loader import SourcesConfig, load_documents_from_dir
 
     settings = get_settings()
-    if fixtures:
-        root = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corpus"
+    if fixtures or corpus:
+        root = corpus or default_fixture_corpus()
         docs = load_documents_from_dir(root, SourcesConfig.load(settings.sources_file))
         pipeline = RagPipeline.from_documents(docs, settings)
     else:
         pipeline = RagPipeline.from_index(settings)
 
-    report = run_eval(pipeline, load_golden(), k=k, with_answers=not no_answers)
+    report = run_eval(pipeline, load_golden(golden), k=k, with_answers=not no_answers)
     table = Table(title=f"Golden evaluation (k={k})")
     table.add_column("id")
     table.add_column("hit")
