@@ -28,9 +28,10 @@ quality of retrieval and generation is measured, not assumed.
 6. [Configuration](#configuration)
 7. [How the pipeline works, step by step](#how-the-pipeline-works-step-by-step)
 8. [Testing: golden tests and similarity tests](#testing-golden-tests-and-similarity-tests)
-9. [Evaluation report](#evaluation-report)
-10. [Project layout](#project-layout)
-11. [Design decisions](#design-decisions)
+9. [Integrating into an existing agent](#integrating-into-an-existing-agent)
+10. [Evaluation report](#evaluation-report)
+11. [Project layout](#project-layout)
+12. [Design decisions](#design-decisions)
 
 ---
 
@@ -319,7 +320,72 @@ index.
 
 ---
 
-## Using it from an agent (MCP server)
+## Integrating into an existing agent
+
+The RAG system is meant to be *used by* agents, not only queried by people. There are three ways
+to plug it in, depending on where the agent runs. In all of them, expose **search** as the tool
+and let the agent's own model do the reasoning; the `ask` endpoint is only useful when you want a
+self-contained answer from the local Ollama model (which takes one to two minutes on CPU, while
+retrieval takes well under a second).
+
+### 1. Same Python process: the retriever as a LangChain tool
+
+Install the package into the agent's environment
+(`pip install git+https://github.com/Chantifa/iu-code-rag.git`), make sure `data/index` exists or
+point `DATA_DIR` at it, and wrap the pipeline in a tool. The docstring becomes the tool
+description that the model sees, so keep it specific:
+
+```python
+from langchain_core.tools import tool
+from iu_code_rag.chain import RagPipeline
+from iu_code_rag.config import Settings
+
+pipeline = RagPipeline.from_index(Settings())   # loads FAISS + BM25 once
+
+@tool
+def search_code(query: str) -> str:
+    """Search Chantifa's GitHub projects and the IU (iubh) course repositories.
+    Returns the most relevant code/markdown chunks with their GitHub links."""
+    docs = pipeline.search(query, k=5)
+    return "\n\n".join(f"[{d.metadata['source']}]({d.metadata['url']})\n{d.page_content}" for d in docs)
+```
+
+`pipeline.retriever` is a LangChain `BaseRetriever`, so it also fits anywhere a chain expects a
+retriever, without the tool wrapper. The same function already exists as
+`iu_code_rag.mcp_server.search_code`; `tool(search_code)` turns it into a LangChain tool directly.
+
+### 2. Separate process: the Docker API as a remote tool
+
+When the stack runs in Docker and the agent lives elsewhere (another service, a notebook, a Claude
+tool-use loop), the tool is one HTTP call. Inside the compose network use `http://rag:8000`.
+
+```python
+import httpx
+
+def search_code(query: str, k: int = 5) -> str:
+    r = httpx.post("http://localhost:8000/search", json={"query": query, "k": k}, timeout=60)
+    r.raise_for_status()
+    return "\n\n".join(f"[{x['source']}]({x['url']})\n{x['content']}" for x in r.json()["results"])
+```
+
+For an agent built on the Anthropic SDK the matching tool definition is:
+
+```python
+tools = [{
+    "name": "search_code",
+    "description": "Search Chantifa's and IU's GitHub repositories for relevant code and docs.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "k": {"type": "integer", "default": 5}},
+        "required": ["query"],
+    },
+}]
+```
+
+When the model answers with a `tool_use` block named `search_code`, call the function above and
+return its string as the `tool_result`.
+
+### 3. Any MCP client: the built-in MCP server
 
 `src/iu_code_rag/mcp_server.py` exposes the RAG system through the Model Context Protocol, so
 Claude Code, Claude Desktop, Cursor, or a LangChain/LangGraph agent with an MCP adapter can call it
@@ -355,15 +421,46 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-For a LangGraph agent without MCP, the same functions can be wrapped directly:
+### LangGraph, agent graphs and `create_react_agent`
+
+**LangGraph** is the runtime underneath LangChain 1.x agents. It does not create an agent by
+itself: you describe the agent as a *graph* and LangGraph executes it, runs the loop, persists the
+state between steps, and lets you stream or interrupt a run.
+
+An **agent graph** is the agent's control flow written down as nodes and edges instead of hidden in
+a `while` loop. Nodes are steps that read and update a shared state (for a chat agent: the list of
+messages), for example "call the model", "execute the requested tools", "grade the retrieved
+documents" or "ask a human for approval". Edges say which node runs next; a *conditional* edge
+decides that from the state, for example "the last message contains tool calls, so go to the tool
+node, otherwise finish". Writing it as a graph makes it easy to add steps ("search the IU
+repositories first, then reason"), to checkpoint state and to see exactly which path a run took.
+
+**`create_react_agent`** (from `langgraph.prebuilt`) builds the smallest useful agent graph for
+you, the ReAct pattern (Reason + Act): a model node with the tools attached, a tool node, and one
+conditional edge that loops between them until the model answers without a tool call. Since
+LangChain 1.0 the recommended entry point is `create_agent` from `langchain.agents`, which builds
+the same loop on LangGraph with a newer middleware system; both accept the tool from above
+unchanged.
 
 ```python
+from langgraph.prebuilt import create_react_agent          # or: from langchain.agents import create_agent
+from langchain_ollama import ChatOllama                     # or: ChatAnthropic(model="claude-opus-5")
 from langchain_core.tools import tool
 from iu_code_rag.mcp_server import search_code
 
-search_tool = tool(search_code)          # docstring becomes the tool description
-agent = create_react_agent(model, tools=[search_tool])
+agent = create_react_agent(
+    ChatOllama(model="qwen2.5-coder:7b", temperature=0),
+    tools=[tool(search_code)],
+    prompt="You answer questions about Chantifa's and IU's repositories. Search before you answer and cite files.",
+)
+
+result = agent.invoke({"messages": [("user", "How does the rate limiter in the Interviews repo work?")]})
+print(result["messages"][-1].content)
 ```
+
+The model first calls `search_code`, receives the chunks and links, then writes an answer with
+citations. Add `checkpointer=MemorySaver()` plus a `thread_id` in the config for multi-turn memory,
+and use `agent.stream(...)` to watch each tool call as it happens.
 
 ---
 
