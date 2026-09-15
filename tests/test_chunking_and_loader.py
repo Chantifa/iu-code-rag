@@ -28,6 +28,12 @@ def test_sources_config_filters(sources_config):
     assert not sources_config.accepts("node_modules/x/index.js")
     assert not sources_config.accepts("assets/logo.png")
     assert not sources_config.accepts("package-lock.json")
+    # committed virtual environments must never be indexed
+    assert not sources_config.accepts("DLBDSMLSL01/lib/python3.12/site-packages/scipy/signal/_filter_design.py")
+    assert not sources_config.accepts(".venv/Lib/site-packages/numpy/__init__.py")
+    assert not sources_config.accepts("venv/bin/activate_this.py")
+    assert sources_config.accepts("src/env/config.py") is False  # any folder literally named env
+    assert sources_config.accepts("src/environment/config.py")
 
 
 def test_chunks_carry_header_and_metadata(documents):

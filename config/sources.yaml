@@ -50,6 +50,14 @@ include_extensions:
 exclude_globs:
   - "**/node_modules/**"
   - "**/.git/**"
+  # committed virtual environments / vendored third-party packages (iubh/DLBDSMLSL01 ships one
+  # with ~7000 library files - 100 MB of noise that would dominate the index)
+  - "**/site-packages/**"
+  - "**/lib/python*/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/env/**"
+  - "**/.tox/**"
   - "**/dist/**"
   - "**/build/**"
   - "**/target/**"
